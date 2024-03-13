@@ -29,22 +29,22 @@ int main(int argc, char *argv[]) {
   sigemptyset(&act.sa_mask);
   if (sigaction(SIGALRM, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(3);
+    exit(-3);
   }
   if (sigaction(SIGUSR1, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(3);
+    exit(-3);
   }
   if (sigaction(SIGUSR2, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(3);
+    exit(-3);
   }
   sigaddset(&act.sa_mask, SIGALRM);
   sigaddset(&act.sa_mask, SIGUSR1);
   sigaddset(&act.sa_mask, SIGUSR2);
   if (sigaction(SIGTERM, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(3);
+    exit(-3);
   }
 
   alarm(1);
@@ -58,10 +58,8 @@ int main(int argc, char *argv[]) {
       gate = !gate;
       flip_gate = 0;
     }
-    usleep( 30);
+    usleep(50);
   }
-
-  return 0;
 }
 
 void TellTime(int id, bool gate, pid_t my_pid) {
@@ -85,6 +83,6 @@ void SigHandler(int signal) {
     flip_gate = 1;
     break;
   case SIGTERM:
-    *p_gate ? exit(1) : exit(0);
+    *p_gate ? exit(-1) : exit(-2);
   }
 }
