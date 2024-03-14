@@ -7,8 +7,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-volatile sig_atomic_t should_close{}, tell_time{1}, timer{}, flip_gate{};
-const bool *const p_gate{};
+constexpr int kGateClosed{1}, kGateOpen{0};
+volatile bool should_close{}, tell_time{true}, flip_gate{};
+volatile int timer{};
 
 void TellTime(int id, bool gate, pid_t my_pid);
 void SigHandler(int signal);
@@ -29,37 +30,39 @@ int main(int argc, char *argv[]) {
   sigemptyset(&act.sa_mask);
   if (sigaction(SIGALRM, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(-3);
+    exit(3);
   }
   if (sigaction(SIGUSR1, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(-3);
+    exit(3);
   }
   if (sigaction(SIGUSR2, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(-3);
+    exit(3);
   }
   sigaddset(&act.sa_mask, SIGALRM);
   sigaddset(&act.sa_mask, SIGUSR1);
   sigaddset(&act.sa_mask, SIGUSR2);
   if (sigaction(SIGTERM, &act, NULL)) {
     std::cerr << "failed to set signal action" << std::endl;
-    exit(-3);
+    exit(3);
   }
 
   alarm(1);
 
-  while (true) {
-    if (tell_time == 1) {
+  while (!should_close) {
+    if (tell_time) {
       TellTime(id, gate, my_pid);
-      tell_time = 0;
+      tell_time = false;
     }
-    if (flip_gate == 1) {
+    if (flip_gate) {
       gate = !gate;
-      flip_gate = 0;
+      flip_gate = false;
     }
     usleep(50);
   }
+  std::cerr << "exiting child : " << my_pid << std::endl;
+  gate ? exit(kGateOpen) : exit(kGateClosed);
 }
 
 void TellTime(int id, bool gate, pid_t my_pid) {
@@ -74,15 +77,16 @@ void SigHandler(int signal) {
     alarm(1);
     ++timer;
     if (timer % 15 == 0)
-      tell_time = 1;
+      tell_time = true;
     break;
   case SIGUSR1:
-    tell_time = 1;
+    tell_time = true;
     break;
   case SIGUSR2:
-    flip_gate = 1;
+    flip_gate = true;
     break;
   case SIGTERM:
-    *p_gate ? exit(-1) : exit(-2);
+    should_close = true;
+    break;
   }
 }
