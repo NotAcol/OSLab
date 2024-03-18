@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <vector>
 
-constexpr char kChildCodePath[]{"/home/acol/Documents/OSLab/Askisi-2.1/child"};
+constexpr char kChildCodePath[]{"/home/acol/Documents/OSLab/Askisi-2/child"};
 
 struct ChildData {
   pid_t child_pid{};
