@@ -1,8 +1,9 @@
-### ASKHSH 2
+## ASKHSH 2
 
 Αν στείλω SIGTERM σε ένα παιδί τερματίζει κανονικά και ο parent το αντικαθιστά αλλά το νέο παιδί δεν ακούει πλέον στο SIGTERM από τον parent όταν τερματίζει ή από το shell
 
-#parent
+
+### parent
 ```
   case SIGCHLD:
     if (info->si_code == CLD_STOPPED) {
@@ -36,7 +37,7 @@
     }
     break;
 ```
-#child
+### child
 
 ```
   sigaddset(&act.sa_mask, SIGALRM);
