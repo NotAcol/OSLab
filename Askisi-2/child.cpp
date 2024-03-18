@@ -34,15 +34,15 @@ int main(int argc, char *argv[]) {
       flip = 0;
     }
     if (tell_time) {
-      std::cout << "[ID=" << ID << "/PID=" << my_pid << "/TIME=" << timer
-                << "s] The gates are " << (gate ? "open!" : "closed!")
-                << '\n';
+      std::cout << (gate ? "\033[32m" : "\033[31m") << "[ID=" << ID
+                << "/PID=" << my_pid << "/TIME=" << timer << "s] The gates are "
+                << (gate ? "open!" : "closed!") << "\033[0m\n";
       tell_time = 0;
     }
     usleep(50);
   }
 
-  std::cerr << "exiting child : " << my_pid << std::endl;
+  std::cerr << "\033[33mexiting child: " << my_pid << "\033[0m"<< std::endl;
   gate ? exit(1) : exit(0);
 }
 

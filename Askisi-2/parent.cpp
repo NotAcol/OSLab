@@ -72,13 +72,13 @@ int main(int argc, char *argv[]) {
       std::cerr << "failed to create child with ID : " << i << " aborting...";
       raise(SIGTERM);
     } else if (children[i] != 0) {
-      std::cout << "[PARENT/PID=" << my_pid << "] Created child " << i
+      std::cout << "\033[34m[PARENT/PID=" << my_pid << "] Created child " << i
                 << "(PID=" << children[i] << ") and initial state '"
-                << argv[1][i] << "'\n";
+                << argv[1][i] << "'\033[0m\n";
     } else {
       execl(kChildCodePath, kChildCodePath, std::to_string(i).c_str(),
             (argv[1][i] == 't' ? "t" : "f"), NULL);
-      std::cerr << "Child : " << getpid() << " failed to execute "
+      std::cerr << "Child: " << getpid() << " failed to execute "
                 << kChildCodePath;
       exit(2);
     }
@@ -95,14 +95,14 @@ int main(int argc, char *argv[]) {
                       << " aborting...";
             raise(SIGTERM);
           } else if (children[i] != 0) {
-            std::cout << "[PARENT/PID=" << my_pid << "] Recreated child " << i
+            std::cout << "\033[34m[PARENT/PID=" << my_pid << "] Recreated child " << i
                       << "(PID=" << children[i] << ") and initial state '"
-                      << (dead_kids.back().gate ? "t" : "f") << "'\n";
+                      << (dead_kids.back().gate ? "t" : "f") << "'\033[0m\n";
             dead_kids.pop_back();
           } else {
             execl(kChildCodePath, kChildCodePath, std::to_string(i).c_str(),
                   (dead_kids.back().gate ? "t" : "f"), NULL);
-            std::cerr << "Child : " << getpid() << " failed to execute "
+            std::cerr << "Child: " << getpid() << " failed to execute "
                       << kChildCodePath;
             exit(2);
           }
@@ -113,6 +113,7 @@ int main(int argc, char *argv[]) {
     if (tell_all) {
       for (size_t i{}; i < child_count; ++i) {
         kill(children[i], SIGUSR1);
+        usleep(1);
       }
       tell_all = 0;
     }
@@ -146,11 +147,11 @@ void SigAction(int signal, siginfo_t *info, void *) {
     break;
   case SIGCHLD:
     if (info->si_code == CLD_STOPPED) {
-      std::cout << "resuming child : " << info->si_pid << "\n";
+      std::cout << "\033[34mresuming child: " << info->si_pid << "\033[0m\n";
       if (kill(info->si_pid, SIGCONT))
         raise(SIGTERM);
     } else if (info->si_code == CLD_CONTINUED) {
-      std::cout << "child : " << info->si_pid << " resumed" << std::endl;
+      std::cout << "\033[34mchild: " << info->si_pid << " resumed\033[0m" << std::endl;
     } else if (info->si_code == CLD_EXITED) {
       ChildData temp;
       temp.gate = info->si_status == 1;
