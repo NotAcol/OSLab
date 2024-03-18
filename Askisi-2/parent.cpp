@@ -1,166 +1,197 @@
+#include <array>
 #include <bits/types/siginfo_t.h>
 #include <csignal>
 #include <cstddef>
 #include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
 #include <iostream>
-#include <ostream>
-#include <signal.h>
+#include <iterator>
+#include <memory>
 #include <string>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
-constexpr bool kGateClosed{1}, kGateOpen{0};
-void SigAction(int signal, siginfo_t *info, void *);
+constexpr char kChildCodePath[]{"/home/acol/Documents/OSLab/Askisi-2.1/child"};
 
-constexpr char kChildPath[]{"/home/acol/Documents/OSLab/Askisi-2/child"};
-volatile sig_atomic_t tell_all{};
-std::vector<int> *p_children_pids;
+struct ChildData {
+  pid_t child_pid{};
+  bool gate;
+};
+
+void SigAction(int signal, siginfo_t *info, void *);
+volatile sig_atomic_t tell_all{}, should_close{};
+
+std::vector<ChildData> dead_kids;
 
 int main(int argc, char *argv[]) {
 
   if (argc != 2) {
-    std::cerr << "Usage: ./a.out [gates]";
-    exit(1);
-  }
-  if (argv[1][0] == '\0') {
-    std::cerr << "Usage: ./a.out [gates]";
-    exit(1);
+    std::cerr << "Usage : ./a.out [gates]\n";
+    return 1;
   }
 
-  size_t gate_count{};
-  size_t i{};
-  for (; argv[1][i] != '\0'; ++i) {
-    if (argv[1][i] == 't' || argv[1][i] == 'f') {
-      ++gate_count;
-    } else {
-      std::cerr << "[gates] must be either 't' or 'f'";
-      exit(1);
+  size_t child_count{};
+  for (; argv[1][child_count] != '\0'; ++child_count) {
+    if (argv[1][child_count] != 't' && argv[1][child_count] != 'f') {
+      std::cerr << "[gates] must be either 't' or 'f'\n";
+      return 1;
     }
   }
-  std::cout << "number of gates : " << i;
 
-  pid_t parent_pid = getpid();
+  if (child_count == 0) {
+    std::cerr << "Usage : ./a.out [gates]\n";
+    return 1;
+  }
 
-  std::vector<int> children_pids(gate_count); // maybe bug if int isnt 32bit
-  p_children_pids = &children_pids;
-  size_t child_id{};
+  pid_t my_pid{getpid()};
 
   struct sigaction act {};
   act.sa_sigaction = SigAction;
   act.sa_flags = SA_RESTART | SA_SIGINFO;
-  sigemptyset(&act.sa_mask);
+  if (sigemptyset(&act.sa_mask))
+    return 1;
+  if (sigaction(SIGUSR1, &act, NULL))
+    return 1;
 
-  if (sigaction(SIGUSR1, &act, NULL)) {
-    std::cerr << "failed to set sigaction" << std::endl;
-    raise(SIGTERM);
-  }
+  if (sigaddset(&act.sa_mask, SIGUSR1))
+    return 1;
+  if (sigaction(SIGCHLD, &act, NULL))
+    return 1;
 
-  sigaddset(&act.sa_mask, SIGUSR1);
-  sigaddset(&act.sa_mask, SIGTERM);
-  if (sigaction(SIGCHLD, &act, NULL)) {
-    std::cerr << "failed to set sigaction" << std::endl;
-    raise(SIGTERM);
-  }
+  if (sigaddset(&act.sa_mask, SIGCHLD))
+    return 1;
+  if (sigaction(SIGTERM, &act, NULL))
+    return 1;
 
-  sigaddset(&act.sa_mask, SIGCHLD);
-  if (sigaction(SIGTERM, &act, NULL)) {
-    std::cerr << "failed to set sigaction" << std::endl;
-    raise(SIGTERM);
-  }
+  auto children = std::make_unique<pid_t[]>(child_count);
+  dead_kids.reserve(child_count);
 
-  for (; child_id < gate_count; ++child_id) {
-    children_pids[child_id] = fork();
-    if (children_pids[child_id] < 0) {
-      std::cerr << "failed to create child, aborting";
+  for (int i{}; i < child_count; ++i) {
+    children[i] = fork();
+    if (children[i] < 0) {
+      std::cerr << "failed to create child with ID : " << i << " aborting...";
       raise(SIGTERM);
-    } else if (children_pids[child_id] != 0) {
-      std::cout << "[PARENT/PID=" << parent_pid << "] Created child "
-                << child_id << " (PID=" << children_pids[child_id]
-                << ") and initial state '" << argv[1][child_id] << '\n';
+    } else if (children[i] != 0) {
+      std::cout << "[PARENT/PID=" << my_pid << "] Created child " << i
+                << "(PID=" << children[i] << ") and initial state '"
+                << argv[1][i] << "'\n";
     } else {
-      execl(kChildPath, kChildPath, std::to_string(child_id).c_str(), argv[1],
-            NULL);
-      std::cerr << "failed to execute child code" << std::endl;
-      kill(parent_pid, SIGTERM);
-      exit(3);
+      execl(kChildCodePath, kChildCodePath, std::to_string(i).c_str(),
+            (argv[1][i] == 't' ? "t" : "f"), NULL);
+      std::cerr << "Child : " << getpid() << " failed to execute "
+                << kChildCodePath;
+      exit(2);
     }
   }
 
-  while (true) {
-    if (tell_all) {
-      for (const auto &child : children_pids) {
-        kill(child, SIGUSR1);
-      }
-      tell_all = 0;
-    }
-    usleep(50);
-  }
+  while (!should_close) {
 
-  return 0;
-}
-
-void SigAction(int signal, siginfo_t *info, void *) {
-  switch (info->si_signo) {
-
-  case SIGUSR1:
-    if (!tell_all)
-      tell_all = 1;
-    break;
-
-  case SIGCHLD:
-    if (info->si_code == CLD_STOPPED) {
-      std::cout << "resuming child : " << info->si_pid << '\n';
-      if (kill(info->si_pid, SIGCONT))
-        raise(SIGTERM);
-      // int status;
-      // waitpid(info->si_pid, &status, WNOHANG);
-      // if (WIFCONTINUED(status)) {
-      //   std::cout << "succeeded\n";
-      //   break;
-      // }
-      // raise(SIGTERM);
-    } else if (info->si_code == CLD_CONTINUED) {
-      std::cout << "child : " << info->si_pid << " resumed" << std::endl;
-    } else if (info->si_code == CLD_EXITED) {
-      std::cout << "recreating child" << std::endl;
-      for (int i{}; i < p_children_pids->size(); ++i) {
-        if (p_children_pids->at(i) == info->si_pid) {
-          p_children_pids->data()[i] = fork(); //remember to change!
-          if (p_children_pids->at(i) < 0) {
-            std::cerr << "failed to recreate child, aborting" << std::endl;
+    while (!dead_kids.empty()) {
+      for (size_t i{}; i < child_count; ++i) {
+        if (children[i] == dead_kids.back().child_pid) {
+          children[i] = fork();
+          if (children[i] < 0) {
+            std::cerr << "failed to recreate child with ID : " << i
+                      << " aborting...";
             raise(SIGTERM);
-          } else if (p_children_pids->at(i) != 0) {
-            std::cout << "Recreated child [ID/" << i
-                      << "] with new pid : " << p_children_pids->at(i)
-                      << std::endl;
+          } else if (children[i] != 0) {
+            std::cout << "[PARENT/PID=" << my_pid << "] Recreated child " << i
+                      << "(PID=" << children[i] << ") and initial state '"
+                      << (dead_kids.back().gate ? "t" : "f") << "'\n";
+            dead_kids.pop_back();
           } else {
-            execl(kChildPath, kChildPath, std::to_string(i).c_str(),
-                  (info->si_status ? "f" : "t"), NULL);
-            std::cerr << "failed to execute child code" << std::endl;
-            exit(3);
+            execl(kChildCodePath, kChildCodePath, std::to_string(i).c_str(),
+                  (dead_kids.back().gate ? "t" : "f"), NULL);
+            std::cerr << "Child : " << getpid() << " failed to execute "
+                      << kChildCodePath;
+            exit(2);
           }
         }
       }
+    }
+
+    if (tell_all) {
+      for (size_t i{}; i < child_count; ++i) {
+        kill(children[i], SIGUSR1);
+      }
+      tell_all = 0;
+    }
+
+    usleep(50);
+  }
+
+  act.sa_handler = SIG_IGN;
+  while (sigemptyset(&act.sa_mask)) {
+  }
+  while (sigaction(SIGCHLD, &act, NULL)) {
+  }
+  while (sigaction(SIGUSR1, &act, NULL)) {
+  }
+
+  for (size_t i{}; i < child_count; ++i) {
+    kill(children[i], SIGTERM);
+    usleep(1);
+  }
+
+  act.sa_handler = SIG_DFL;
+  while (sigaction(SIGTERM, &act, NULL)) {
+  }
+  raise(SIGTERM);
+}
+
+void SigAction(int signal, siginfo_t *info, void *) {
+  switch (signal) {
+  case SIGUSR1:
+    tell_all = 1;
+    break;
+  case SIGCHLD:
+    if (info->si_code == CLD_STOPPED) {
+      std::cout << "resuming child : " << info->si_pid << "\n";
+      if (kill(info->si_pid, SIGCONT))
+        raise(SIGTERM);
+    } else if (info->si_code == CLD_CONTINUED) {
+      std::cout << "child : " << info->si_pid << " resumed" << std::endl;
+    } else if (info->si_code == CLD_EXITED) {
+      ChildData temp;
+      temp.gate = info->si_status == 1;
+      temp.child_pid = info->si_pid;
+      dead_kids.push_back(temp);
     } else {
       raise(SIGTERM);
     }
     break;
-
   case SIGTERM:
-    for (const auto &pid : *p_children_pids) {
-      kill(static_cast<pid_t>(pid), SIGTERM);
-    }
-    struct sigaction temp {};
-    temp.sa_handler = SIG_DFL;
-    sigemptyset(&temp.sa_mask);
-    sigaddset(&temp.sa_mask, SIGCHLD);
-    sigaddset(&temp.sa_mask, SIGUSR1);
-    sigaddset(&temp.sa_mask, SIGCHLD);
-    sigaction(SIGTERM, &temp, NULL);
-    raise(SIGTERM);
+    should_close = 1;
+    break;
   }
 }
+
+/*
+
+void SigchldHandler(int signal) {
+  int status{};
+  pid_t child_pid{waitpid(-1, &status, WNOHANG | WCONTINUED)};
+
+  if (child_pid == -1)
+    raise(SIGTERM);
+  else if (child_pid == 0)
+    return;
+
+  if (WIFEXITED(status)) {
+    if (WEXITSTATUS(status) == 2)
+      raise(SIGTERM);
+
+    ChildData temp{};
+    temp.child_pid = child_pid;
+    temp.gate = WEXITSTATUS(status);
+    dead_kids.push_back(temp);
+    return;
+  } else if (WIFSTOPPED(status)) {
+    kill(child_pid, SIGCONT);
+  } else if (WIFCONTINUED(status)) {
+    std::cout << "continued\n";
+  } else if (WIFSIGNALED(status)) {
+      raise(SIGTERM);
+  }
+}
+*/
