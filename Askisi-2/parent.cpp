@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 
   struct sigaction act {};
   act.sa_sigaction = SigAction;
-  act.sa_flags = SA_RESTART | SA_SIGINFO;
+  act.sa_flags = SA_RESTART | SA_SIGINFO | SA_NOCLDWAIT;
   if (sigemptyset(&act.sa_mask))
     return 1;
   if (sigaction(SIGUSR1, &act, NULL))
