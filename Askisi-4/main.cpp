@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
     std::string PORT = "20241";
     bool debug{};
 
-    // TODO(acol): maybe check for argument correctness
+    // TODO(Panagiotis): maybe check for argument correctness
     for (size_t i{1}; i < argc; ++i) {
         if (strcmp(argv[i], "--host") == 0) {
             HOST = argv[i + 1];
@@ -81,9 +81,9 @@ int main(int argc, char *argv[]) {
 
     fd_set read_fds;
 
-    // NOTE(acol): why ever use select over poll
-    // NOTE(acol): why do I even need poll or select, server is never sending
-    // without being asked
+    // NOTE(Panagiotis): why ever use select over poll
+    // NOTE(Panagiotis): why do I even need poll or select, server is never
+    // sending without being asked
 
     for (;;) {
         FD_ZERO(&read_fds);
@@ -101,7 +101,8 @@ int main(int argc, char *argv[]) {
             std::getline(std::cin, input);
 
             if (input == "help") {
-                std::cout << "some help message\n";  // TODO(acol): help message
+                std::cout
+                    << "some help message\n";  // TODO(Panagiotis): help message
             } else if (input == "get") {
                 if (debug) std::cout << "\033[0;33m[DEBUG] sent 'get'\033[0m\n";
 
@@ -115,8 +116,8 @@ int main(int argc, char *argv[]) {
                               << "'\033[0m\n";
                 ParseGet(read_buffer);
 
-            } else if (input ==
-                       "exit") {  // NOTE(acol): should_close = true; continue;
+            } else if (input == "exit") {  // NOTE(Panagiotis): should_close =
+                                           // true; continue;
                 return 0;
             } else if (isdigit(input[0])) {
                 while (write(sd, input.c_str(), input.size() + 1) == -1)
@@ -161,7 +162,7 @@ int main(int argc, char *argv[]) {
                           << "'\n";
             }
 
-            // NOTE(acol): why does this bug!!!!!!!!!!!!
+            // NOTE(Panagiotis): why does this bug!!!!!!!!!!!!
             //  else {
             //     std::cout << "some help message\n";
             // }
