@@ -25,7 +25,6 @@ int main(int argc, char *argv[]) {
     std::string PORT = "20241";
     bool debug{};
 
-    // TODO(Panagiotis): maybe check for argument correctness
     for (size_t i{1}; i < argc; ++i) {
         if (strcmp(argv[i], "--host") == 0) {
             HOST = argv[i + 1];
@@ -73,7 +72,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // bool should_close{};
     std::string input;
     input.reserve(100);
     char read_buffer[101];
@@ -116,9 +114,9 @@ int main(int argc, char *argv[]) {
                               << "'\033[0m\n";
                 ParseGet(read_buffer);
 
-            } else if (input == "exit") {  // NOTE(Panagiotis): should_close =
-                                           // true; continue;
+            } else if (input == "exit") {
                 return 0;
+
             } else if (isdigit(input[0])) {
                 while (write(sd, input.c_str(), input.size() + 1) == -1)
                     usleep(500);
@@ -161,11 +159,6 @@ int main(int argc, char *argv[]) {
                 std::cout << "\033[0;36mResponse: \033[0m'" << read_buffer
                           << "'\n";
             }
-
-            // NOTE(Panagiotis): why does this bug!!!!!!!!!!!!
-            //  else {
-            //     std::cout << "some help message\n";
-            // }
         }
         if (FD_ISSET(sd, &read_fds)) {
             read_length = read(sd, read_buffer, 100);
